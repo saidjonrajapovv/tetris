@@ -65,7 +65,7 @@ int main() {
         clear();
 
         while(!game_started) {
-            mvprintw(HEIGHT / 2, (WIDTH - 10), "Press any key( <- , -> , ^) to start, q to quit");
+            mvprintw(HEIGHT / 2, (WIDTH - 10), "  Tetris in C using ncurses.h \n Press any key( <- , -> , ^) to start, q to quit");
             refresh();
             int start_ch = getch();
             if (start_ch == KEY_LEFT || start_ch == KEY_RIGHT || start_ch == KEY_DOWN ||start_ch == KEY_UP) {
