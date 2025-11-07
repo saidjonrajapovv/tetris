@@ -1,5 +1,7 @@
 #include <ncurses.h>
 #include <unistd.h>
+#include <stdlib.h>
+#include <time.h>
 #include <stdbool.h>
 
 #define WIDTH 10
@@ -7,8 +9,30 @@
 
 int board[HEIGHT][WIDTH] = {0};
 
-// Draw the board grid
-void draw_board(int board[HEIGHT][WIDTH]) {
+// ---- Block shapes (4x4 each) ----
+int blocks[3][4][4] = {
+    {   // Square
+        {1,1,0,0},
+        {1,1,0,0},
+        {0,0,0,0},
+        {0,0,0,0}
+    },
+    {   // Line
+        {1,1,1,1},
+        {0,0,0,0},
+        {0,0,0,0},
+        {0,0,0,0}
+    },
+    {   // L-shape
+        {1,0,0,0},
+        {1,1,1,0},
+        {0,0,0,0},
+        {0,0,0,0}
+    }
+};
+
+// ---- Draw the board ----
+void draw_board() {
     for (int y = 0; y < HEIGHT; y++) {
         for (int x = 0; x < WIDTH; x++) {
             if (board[y][x])
@@ -19,12 +43,36 @@ void draw_board(int board[HEIGHT][WIDTH]) {
     }
 }
 
-// Draw a block at given position
-void draw_block(int y, int x, int block[2][2]) {
-    for (int i = 0; i < 2; i++) {
-        for (int j = 0; j < 2; j++) {
+// ---- Draw current block ----
+void draw_block(int y, int x, int block[4][4]) {
+    for (int i = 0; i < 4; i++) {
+        for (int j = 0; j < 4; j++) {
             if (block[i][j])
                 mvprintw(y + i, (x + j) * 2, "[]");
+        }
+    }
+}
+
+// ---- Collision detection ----
+bool check_collision(int y, int x, int block[4][4]) {
+    for (int i = 0; i < 4; i++) {
+        for (int j = 0; j < 4; j++) {
+            if (block[i][j]) {
+                if (y + i >= HEIGHT) return true;           // bottom
+                if (x + j < 0 || x + j >= WIDTH) return true; // sides
+                if (board[y + i][x + j]) return true;        // other blocks
+            }
+        }
+    }
+    return false;
+}
+
+// ---- Merge block into board ----
+void merge_block(int y, int x, int block[4][4]) {
+    for (int i = 0; i < 4; i++) {
+        for (int j = 0; j < 4; j++) {
+            if (block[i][j])
+                board[y + i][x + j] = 1;
         }
     }
 }
@@ -37,46 +85,61 @@ int main() {
     keypad(stdscr, TRUE);
     nodelay(stdscr, TRUE);
 
-    // Block shape (2x2 square)
-    int block[2][2] = {
-        {1, 1},
-        {1, 1}
-    };
+    srand(time(NULL));
 
-    int posX = WIDTH / 2 - 1;
+    int posX = WIDTH / 2 - 2;
     int posY = 0;
     int frame = 0;
-    bool game_started = false;
+    int current = rand() % 3;
+    bool running = true;
+
+    // Wait for key to start
+    mvprintw(HEIGHT / 2, (WIDTH - 10), "Tetris in C\nPress any arrow key to start (q to quit)");
+    refresh();
     while (1) {
+        int start_ch = getch();
+        if (start_ch == 'q') { endwin(); return 0; }
+        if (start_ch == KEY_LEFT || start_ch == KEY_RIGHT || start_ch == KEY_DOWN || start_ch == KEY_UP)
+            break;
+        usleep(50000);
+    }
+
+    while (running) {
         int ch = getch();
         if (ch == 'q') break;
-        if (ch == KEY_LEFT && posX > 0) posX--;
-        if (ch == KEY_RIGHT && posX < WIDTH - 2) posX++;
+
+        // Movement controls
+        if (ch == KEY_LEFT && !check_collision(posY, posX - 1, blocks[current])) posX--;
+        if (ch == KEY_RIGHT && !check_collision(posY, posX + 1, blocks[current])) posX++;
         if (ch == KEY_DOWN) posY++;
 
-        // gravity
+        // Gravity
         frame++;
         if (frame % 10 == 0) posY++;
 
-        // stop at bottom
-        if (posY >= HEIGHT - 2){
-            posY = HEIGHT - 2;
-        }
-        clear();
+        // Check collision with bottom or blocks
+        if (check_collision(posY + 1, posX, blocks[current])) {
+            merge_block(posY, posX, blocks[current]);
+            posY = 0;
+            posX = WIDTH / 2 - 2;
+            current = rand() % 3;
 
-        while(!game_started) {
-            mvprintw(HEIGHT / 2, (WIDTH - 10), "  Tetris in C using ncurses.h \n Press any key( <- , -> , ^) to start, q to quit");
-            refresh();
-            int start_ch = getch();
-            if (start_ch == KEY_LEFT || start_ch == KEY_RIGHT || start_ch == KEY_DOWN ||start_ch == KEY_UP) {
-                game_started = true;
+            // Game over check
+            if (check_collision(posY, posX, blocks[current])) {
+                mvprintw(HEIGHT / 2, (WIDTH - 5), "GAME OVER!");
+                refresh();
+                sleep(2);
+                running = false;
+                continue;
             }
         }
-        draw_board(board);
-        draw_block(posY, posX, block);
+
+        clear();
+        draw_board();
+        draw_block(posY, posX, blocks[current]);
         refresh();
 
-        usleep(50000); // control speed (20 FPS)
+        usleep(50000); // ~20 FPS
     }
 
     endwin();
